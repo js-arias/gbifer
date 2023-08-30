@@ -173,8 +173,7 @@ func readTable(r io.Reader, w io.Writer, cols map[string]bool) error {
 			for i, f := range row {
 				fmt.Printf("%s: %s\n", header[i], f)
 			}
-
-			return fmt.Errorf("table %q: row %d: %v [got %d, want %d, gbifID %s]", input, ln, err, len(row), len(header), row[0])
+			return fmt.Errorf("table %q: row %d: %v", input, ln, err)
 		}
 
 		nr := make([]string, len(keep))
