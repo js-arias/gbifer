@@ -8,6 +8,7 @@ package main
 import (
 	"github.com/js-arias/command"
 	"github.com/js-arias/gbifer/cmd/gbifer/cols"
+	"github.com/js-arias/gbifer/cmd/gbifer/withsp"
 )
 
 var app = &command.Command{
@@ -17,6 +18,7 @@ var app = &command.Command{
 
 func init() {
 	app.Add(cols.Command)
+	app.Add(withsp.Command)
 }
 
 func main() {
