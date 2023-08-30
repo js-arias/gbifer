@@ -170,9 +170,6 @@ func readTable(r io.Reader, w io.Writer, cols map[string]bool) error {
 		}
 		ln, _ := tab.FieldPos(0)
 		if err != nil {
-			for i, f := range row {
-				fmt.Printf("%s: %s\n", header[i], f)
-			}
 			return fmt.Errorf("table %q: row %d: %v", input, ln, err)
 		}
 
