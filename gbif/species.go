@@ -22,6 +22,7 @@ type spAnswer struct {
 type Species struct {
 	Key, NubKey, AcceptedKey int64  // ID
 	CanonicalName            string // name
+	ScientificName           string // full name (with authorship)
 	BasionymKey              int64  // ID of the basionym
 	Authorship               string // author
 	Rank                     string // taxon rank
@@ -37,6 +38,7 @@ type Species struct {
 	OrderKey   int64
 	FamilyKey  int64
 	GenusKey   int64
+	SpeciesKey int64
 
 	Kingdom string
 	Phylum  string
@@ -44,6 +46,7 @@ type Species struct {
 	Order   string
 	Family  string
 	Genus   string
+	Species string
 }
 
 // SpeciesID return a Species from a GBIF species ID.
