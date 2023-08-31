@@ -221,6 +221,9 @@ func (tx *Taxonomy) AddFromGBIF(id int64, maxRank Rank) error {
 		tax := &taxon{data: data}
 
 		if data.Status == "accepted" && data.Rank != Unranked && data.Rank <= maxRank {
+			if _, ok := tx.ids[sp.ParentKey]; ok {
+				tax.data.Parent = sp.ParentKey
+			}
 			tx.tmp = append(tx.tmp, tax)
 			tx.ids[id] = tax
 			return nil
@@ -238,6 +241,123 @@ func (tx *Taxonomy) AddFromGBIF(id int64, maxRank Rank) error {
 		tx.ids[id] = tax
 		id = tax.data.Parent
 	}
+}
+
+// An ErrAmbiguous is the error produced when searching for a name
+// that has multiple possible resolutions in GBIF.
+type ErrAmbiguous struct {
+	Name string
+
+	// The found IDs
+	IDs []int64
+
+	Err error
+}
+
+func (e *ErrAmbiguous) Error() string {
+	return fmt.Sprintf("%v: name %q: found %d IDs", e.Err, e.Name, len(e.IDs))
+}
+
+func (e *ErrAmbiguous) Unwrap() error { return e.Err }
+
+var errAmbiguous = errors.New("ambiguous taxon name")
+
+// AddNameFromGBIF search for a taxon name in GBIF
+// as well as all the parents up to the given rank.
+//
+// If multiple taxons with the indicated name were found
+// it will look for a single accepted name.
+// If there are multiple accepted names,
+// or all the names are synonyms,
+// then it will return an ErrAmbiguous error.
+//
+// Taxa will be added in a temporal space.
+// To formally add the taxa to the taxonomy
+// use the Stage method.
+//
+// It requires an internet connection.
+func (tx *Taxonomy) AddNameFromGBIF(name string, maxRank Rank) error {
+	ls, err := gbif.TaxonName(name)
+	if err != nil {
+		return err
+	}
+	if len(ls) == 0 {
+		return nil
+	}
+
+	sp := ls[0]
+	// ambiguous name,
+	// search for any accepted name.
+	if len(ls) > 1 {
+		v := -1
+		for i, sp := range ls {
+			if sp.TaxonomicStatus != "ACCEPTED" {
+				continue
+			}
+			if v >= 0 {
+				v = -1
+				break
+			}
+			v = i
+		}
+		if v < 0 {
+			ids := make([]int64, 0, len(ls))
+			for _, sp := range ls {
+				ids = append(ids, sp.NubKey)
+			}
+			return &ErrAmbiguous{
+				Name: name,
+				IDs:  ids,
+				Err:  errAmbiguous,
+			}
+		}
+		sp = ls[v]
+	}
+
+	data := Taxon{
+		Name:   sp.CanonicalName,
+		Author: sp.Authorship,
+		ID:     sp.NubKey,
+		Rank:   GetRank(sp.Rank),
+		Status: strings.ToLower(sp.TaxonomicStatus),
+	}
+	if data.Name == "" {
+		data.Name = sp.Species
+	}
+
+	// ignore BOLD "species"
+	if data.Name == "" && strings.HasPrefix(sp.ScientificName, "BOLD:") {
+		return nil
+	}
+
+	tax := &taxon{data: data}
+
+	if data.Status == "accepted" && data.Rank != Unranked && data.Rank <= maxRank {
+		if _, ok := tx.ids[sp.ParentKey]; ok {
+			tax.data.Parent = sp.ParentKey
+		}
+		tx.tmp = append(tx.tmp, tax)
+		tx.ids[data.ID] = tax
+		return nil
+	}
+
+	var pID int64
+	if sp.AcceptedKey != 0 {
+		pID = sp.AcceptedKey
+	} else if sp.ParentKey != 0 {
+		pID = sp.ParentKey
+	} else {
+		pID = sp.BasionymKey
+	}
+	if err := tx.AddFromGBIF(pID, maxRank); err != nil {
+		return err
+	}
+	if _, ok := tx.ids[pID]; ok {
+		tax.data.Parent = pID
+	}
+	tx.tmp = append(tx.tmp, tax)
+	tx.ids[data.ID] = tax
+	return nil
 }
 
 // MinRank returns the most inclusive rank

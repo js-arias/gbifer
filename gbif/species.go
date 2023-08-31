@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -77,4 +79,70 @@ func SpeciesID(id string) (*Species, error) {
 		return nil, fmt.Errorf("gbif: species: no answer after %d retries", Retry)
 	}
 	return nil, fmt.Errorf("gbif: species: %v", err)
+}
+
+// TaxonName returns a list of taxons with a given name.
+func TaxonName(name string) ([]*Species, error) {
+	name = strings.Join(strings.Fields(name), " ")
+	if name == "" {
+		return nil, errors.New("gbif: taxonomy: search an empty taxon")
+	}
+	request := "species?"
+	param := url.Values{}
+	param.Add("name", name)
+	ls, err := taxonList(request, param)
+	if err != nil {
+		return nil, fmt.Errorf("taxonomy: gbif: taxon: %v", err)
+	}
+	return ls, nil
+}
+
+func taxonList(request string, param url.Values) ([]*Species, error) {
+	var ls []*Species
+	var err error
+	end := false
+	for off := int64(0); !end; {
+		if off > 0 {
+			param.Set("offset", strconv.FormatInt(off, 10))
+		}
+		retryErr := true
+		for r := 0; r < Retry; r++ {
+			req := newRequest(request + param.Encode())
+			select {
+			case err = <-req.err:
+				continue
+			case a := <-req.ans:
+				d := json.NewDecoder(a.Body)
+				resp := &spAnswer{}
+				err = d.Decode(resp)
+				a.Body.Close()
+				if err != nil {
+					continue
+				}
+				for _, sp := range resp.Results {
+					if sp.Key != sp.NubKey {
+						continue
+					}
+					ls = append(ls, sp)
+				}
+				if resp.EndOfRecords {
+					// end retry loop
+					end = true
+					r = Retry
+					retryErr = false
+					continue
+				}
+				off += resp.Limit
+				r = Retry
+				retryErr = false
+			}
+		}
+		if retryErr {
+			if err == nil {
+				return nil, fmt.Errorf("no answer after %d retries", Retry)
+			}
+			return nil, err
+		}
+	}
+	return ls, nil
 }

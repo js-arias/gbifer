@@ -97,7 +97,7 @@ func run(c *command.Command, args []string) (err error) {
 	}
 	gbif.Open()
 
-	if err := readTable(in, tx); err != nil {
+	if err := readTable(in, c.Stderr(), tx); err != nil {
 		return err
 	}
 	tx.Stage()
@@ -151,7 +151,7 @@ func readTaxonomy() (*taxonomy.Taxonomy, error) {
 	return tx, nil
 }
 
-func readTable(r io.Reader, tx *taxonomy.Taxonomy) error {
+func readTable(r io.Reader, stderr io.Writer, tx *taxonomy.Taxonomy) error {
 	tab := tsv.NewReader(r)
 	tab.Comma = '\t'
 
@@ -162,6 +162,7 @@ func readTable(r io.Reader, tx *taxonomy.Taxonomy) error {
 
 	keyCol := -1
 	taxCol := -1
+	spCol := -1
 	for i, h := range header {
 		h = strings.ToLower(h)
 		if h == "specieskey" {
@@ -170,9 +171,12 @@ func readTable(r io.Reader, tx *taxonomy.Taxonomy) error {
 		if h == "taxonkey" {
 			taxCol = i
 		}
+		if h == "species" {
+			spCol = i
+		}
 	}
-	if keyCol < 0 || taxCol < 0 {
-		return fmt.Errorf("input data %q without %q or %q fields", input, "speciesKey", "taxonKey")
+	if keyCol < 0 && spCol < 0 {
+		return fmt.Errorf("input data %q without %q or %q fields", input, "speciesKey", "species")
 	}
 	rank := taxonomy.GetRank(rankFlag)
 
@@ -185,28 +189,45 @@ func readTable(r io.Reader, tx *taxonomy.Taxonomy) error {
 		if err != nil {
 			return fmt.Errorf("table %q: row %d: %v", input, ln, err)
 		}
-		var key string
-		if keyCol > 0 {
-			key = row[keyCol]
+		if keyCol >= 0 || taxCol >= 0 {
+			var key string
+			if keyCol >= 0 {
+				key = row[keyCol]
+				if key == "" {
+					continue
+				}
+			}
+			if taxCol >= 0 {
+				key = row[taxCol]
+			}
 			if key == "" {
 				continue
 			}
-		}
-		if taxCol > 0 {
-			key = row[taxCol]
-		}
-		if key == "" {
+
+			id, err := strconv.ParseInt(key, 10, 64)
+			if err != nil {
+				return fmt.Errorf("table %q: row %d: %v", input, ln, err)
+			}
+			if err := tx.AddFromGBIF(id, rank); err != nil {
+				return err
+			}
 			continue
 		}
-
-		id, err := strconv.ParseInt(key, 10, 64)
-		if err != nil {
-			return fmt.Errorf("table %q: row %d: %v", input, ln, err)
+		name := strings.Join(strings.Fields(row[spCol]), " ")
+		if name == "" {
+			continue
 		}
-		if err := tx.AddFromGBIF(id, rank); err != nil {
+		if err := tx.AddNameFromGBIF(name, rank); err != nil {
+			var ambErr *taxonomy.ErrAmbiguous
+			if errors.As(err, &ambErr) {
+				fmt.Fprintf(stderr, "# ambiguous taxon name %q\n", taxonomy.Canon(name))
+				for _, v := range ambErr.IDs {
+					fmt.Fprintf(stderr, "# \t%d\n", v)
+				}
+				continue
+			}
 			return err
 		}
-		continue
 	}
 
 	return nil
