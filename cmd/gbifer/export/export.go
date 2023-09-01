@@ -342,7 +342,7 @@ func readTable(r io.Reader, w io.Writer, tx *taxonomy.Taxonomy) error {
 				taxID = txID
 			}
 			if tx != nil {
-				tax := tx.Taxon(spID)
+				tax := tx.Taxon(txID)
 				if tax.ID == 0 {
 					continue
 				}
