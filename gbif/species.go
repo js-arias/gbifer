@@ -97,6 +97,30 @@ func TaxonName(name string) ([]*Species, error) {
 	return ls, nil
 }
 
+// Children returns an list with the children of a given taxon ID.
+func Children(id int64) ([]*Species, error) {
+	request := "species/" + strconv.FormatInt(id, 10) + "/children?"
+	param := url.Values{}
+	param.Add("offset", "0")
+	ls, err := taxonList(request, param)
+	if err != nil {
+		return nil, fmt.Errorf("taxonomy: gbif: taxon: %v", err)
+	}
+	return ls, nil
+}
+
+// Synonym returns a slice of synonyms of a taxon ID.
+func Synonym(id int64) ([]*Species, error) {
+	request := "species/" + strconv.FormatInt(id, 10) + "/synonyms?"
+	param := url.Values{}
+	param.Add("offset", "0")
+	ls, err := taxonList(request, param)
+	if err != nil {
+		return nil, fmt.Errorf("taxonomy: gbif: taxon: %v", err)
+	}
+	return ls, nil
+}
+
 func taxonList(request string, param url.Values) ([]*Species, error) {
 	var ls []*Species
 	var err error

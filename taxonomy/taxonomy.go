@@ -314,6 +314,9 @@ func (tx *Taxonomy) AddNameFromGBIF(name string, maxRank Rank) error {
 		sp = ls[v]
 	}
 
+	if _, ok := tx.ids[sp.NubKey]; ok {
+		return nil
+	}
 	data := Taxon{
 		Name:   sp.CanonicalName,
 		Author: sp.Authorship,
@@ -360,6 +363,53 @@ func (tx *Taxonomy) AddNameFromGBIF(name string, maxRank Rank) error {
 	return nil
 }
 
+// AddSpecies add a GBIF Species type from an external source.
+func (tx *Taxonomy) AddSpecies(sp *gbif.Species) {
+	if _, ok := tx.ids[sp.NubKey]; ok {
+		return
+	}
+
+	data := Taxon{
+		Name:   sp.CanonicalName,
+		Author: sp.Authorship,
+		ID:     sp.NubKey,
+		Rank:   GetRank(sp.Rank),
+		Status: strings.ToLower(sp.TaxonomicStatus),
+	}
+	if data.Name == "" {
+		data.Name = sp.Species
+	}
+	if data.Name == "" {
+		return
+	}
+
+	tax := &taxon{data: data}
+	var pID int64
+	if sp.AcceptedKey != 0 {
+		pID = sp.AcceptedKey
+	} else if sp.ParentKey != 0 {
+		pID = sp.ParentKey
+	} else {
+		pID = sp.BasionymKey
+	}
+	if _, ok := tx.ids[pID]; ok {
+		tax.data.Parent = pID
+	}
+	tx.tmp = append(tx.tmp, tax)
+	tx.ids[data.ID] = tax
+}
+
+// IDs return the ID of all taxons in the taxonomy.
+func (tx *Taxonomy) IDs() []int64 {
+	ids := make([]int64, 0, len(tx.ids))
+	for _, tax := range tx.ids {
+		ids = append(ids, tax.data.ID)
+	}
+	slices.Sort(ids)
+
+	return ids
+}
+
 // MinRank returns the most inclusive rank
 // found in the taxonomy.
 func (tx *Taxonomy) MinRank() Rank {
@@ -398,6 +448,23 @@ func (tax *taxon) minRank() Rank {
 		}
 	}
 	return minRank
+}
+
+// Rank returns the first defined rank
+// of a taxon,
+// or any of its parents.
+func (tx *Taxonomy) Rank(id int64) Rank {
+	for id != 0 {
+		tax, ok := tx.ids[id]
+		if !ok {
+			return Unranked
+		}
+		if tax.data.Rank != Unranked {
+			return tax.data.Rank
+		}
+		id = tax.data.Parent
+	}
+	return Unranked
 }
 
 // Stage add the taxa in the temporal space
@@ -440,6 +507,15 @@ func (tx *Taxonomy) Stage() {
 			return cmp.Compare(a.data.ID, b.data.ID)
 		})
 	}
+}
+
+// Taxon returns a taxon with a given ID.
+func (tx *Taxonomy) Taxon(id int64) Taxon {
+	tax, ok := tx.ids[id]
+	if !ok {
+		return Taxon{}
+	}
+	return tax.data
 }
 
 // Write writes a taxonomy into a TSV table.
