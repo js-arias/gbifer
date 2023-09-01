@@ -10,6 +10,7 @@ import (
 	"github.com/js-arias/command"
 	"github.com/js-arias/gbifer/cmd/gbifer/tax/add"
 	"github.com/js-arias/gbifer/cmd/gbifer/tax/fill"
+	"github.com/js-arias/gbifer/cmd/gbifer/tax/match"
 )
 
 var Command = &command.Command{
@@ -20,4 +21,5 @@ var Command = &command.Command{
 func init() {
 	Command.Add(add.Command)
 	Command.Add(fill.Command)
+	Command.Add(match.Command)
 }

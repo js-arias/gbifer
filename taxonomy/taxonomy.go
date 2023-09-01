@@ -213,8 +213,8 @@ func (tx *Taxonomy) AddFromGBIF(id int64, maxRank Rank) error {
 			data.Name = sp.Species
 		}
 
-		// ignore BOLD "species"
-		if data.Name == "" && strings.HasPrefix(sp.ScientificName, "BOLD:") {
+		// ignore taxons with empty names
+		if data.Name == "" {
 			return nil
 		}
 
@@ -379,7 +379,17 @@ func (tx *Taxonomy) AddSpecies(sp *gbif.Species) {
 	if data.Name == "" {
 		data.Name = sp.Species
 	}
+
+	// Ignore taxons with empty names
 	if data.Name == "" {
+		return
+	}
+
+	// Ignore taxons with empty IDs
+	if sp.NubKey == 0 {
+		data.ID = sp.Key
+	}
+	if data.ID == 0 {
 		return
 	}
 
