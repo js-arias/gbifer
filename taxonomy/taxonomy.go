@@ -180,6 +180,20 @@ func Read(r io.Reader) (*Taxonomy, error) {
 	return tx, nil
 }
 
+// Accepted return the accepted taxon from a given ID.
+func (tx *Taxonomy) Accepted(id int64) Taxon {
+	for {
+		tax, ok := tx.ids[id]
+		if !ok {
+			return Taxon{}
+		}
+		if tax.data.Status == "accepted" {
+			return tax.data
+		}
+		id = tax.data.Parent
+	}
+}
+
 // AddFromGBIF add a taxon from a GBIF ID,
 // as well as all the parents up to the given rank.
 //

@@ -8,6 +8,7 @@ package main
 import (
 	"github.com/js-arias/command"
 	"github.com/js-arias/gbifer/cmd/gbifer/cols"
+	"github.com/js-arias/gbifer/cmd/gbifer/export"
 	"github.com/js-arias/gbifer/cmd/gbifer/filter"
 	"github.com/js-arias/gbifer/cmd/gbifer/sort"
 	"github.com/js-arias/gbifer/cmd/gbifer/tax"
@@ -21,6 +22,7 @@ var app = &command.Command{
 
 func init() {
 	app.Add(cols.Command)
+	app.Add(export.Command)
 	app.Add(filter.Command)
 	app.Add(sort.Command)
 	app.Add(tax.Command)
