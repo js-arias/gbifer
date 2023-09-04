@@ -26,7 +26,7 @@ var Command = &command.Command{
 	Short: "add taxons to a taxonomy",
 	Long: `
 Command add reads a GBIF occurrence table from the standard input and extracts
-the taxonomy at species level. It prints the taxonomy as a TSV file, with the
+the taxonomy at genus level. It prints the taxonomy as a TSV file, with the
 name of the taxon, the GBIF ID, its rank, the taxonomic status, and the parent
 taxon.
 

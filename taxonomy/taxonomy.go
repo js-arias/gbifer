@@ -92,14 +92,18 @@ type taxon struct {
 
 // A Taxonomy stores taxon IDs
 type Taxonomy struct {
-	ids  map[int64]*taxon
-	root []*taxon // list parent-less of taxa
-	tmp  []*taxon // temporal list of taxons
+	ids   map[int64]*taxon
+	root  []*taxon           // list parent-less of taxa
+	tmp   []*taxon           // temporal list of taxons
+	names map[string][]int64 // map of taxon names to IDs
 }
 
 // NewTaxonomy creates a new empty taxonomy.
 func NewTaxonomy() *Taxonomy {
-	return &Taxonomy{ids: make(map[int64]*taxon)}
+	return &Taxonomy{
+		ids:   make(map[int64]*taxon),
+		names: make(map[string][]int64),
+	}
 }
 
 var headerCols = []string{
@@ -174,6 +178,7 @@ func Read(r io.Reader) (*Taxonomy, error) {
 		tax := &taxon{data: data}
 		tx.tmp = append(tx.tmp, tax)
 		tx.ids[id] = tax
+		tx.names[data.Name] = append(tx.names[data.Name], id)
 	}
 
 	tx.Stage()
@@ -203,12 +208,13 @@ func (tx *Taxonomy) Accepted(id int64) Taxon {
 //
 // It requires an internet connection.
 func (tx *Taxonomy) AddFromGBIF(id int64, maxRank Rank) error {
+	var ls []*gbif.Species
 	for {
 		if id == 0 {
-			return nil
+			break
 		}
 		if _, ok := tx.ids[id]; ok {
-			return nil
+			break
 		}
 
 		sp, err := gbif.SpeciesID(strconv.FormatInt(id, 10))
@@ -216,45 +222,28 @@ func (tx *Taxonomy) AddFromGBIF(id int64, maxRank Rank) error {
 			return err
 		}
 
-		data := Taxon{
-			Name:   sp.CanonicalName,
-			Author: sp.Authorship,
-			ID:     id,
-			Rank:   GetRank(sp.Rank),
-			Status: strings.ToLower(sp.TaxonomicStatus),
-		}
-		if data.Name == "" {
-			data.Name = sp.Species
+		ls = append([]*gbif.Species{sp}, ls...)
+		status := strings.ToLower(sp.TaxonomicStatus)
+		r := GetRank(sp.Rank)
+		if status == "accepted" && r != Unranked && r <= maxRank {
+			break
 		}
 
-		// ignore taxons with empty names
-		if data.Name == "" {
-			return nil
-		}
-
-		tax := &taxon{data: data}
-
-		if data.Status == "accepted" && data.Rank != Unranked && data.Rank <= maxRank {
-			if _, ok := tx.ids[sp.ParentKey]; ok {
-				tax.data.Parent = sp.ParentKey
-			}
-			tx.tmp = append(tx.tmp, tax)
-			tx.ids[id] = tax
-			return nil
-		}
-
+		var pID int64
 		if sp.AcceptedKey != 0 {
-			tax.data.Parent = sp.AcceptedKey
+			pID = sp.AcceptedKey
 		} else if sp.ParentKey != 0 {
-			tax.data.Parent = sp.ParentKey
+			pID = sp.ParentKey
 		} else {
-			tax.data.Parent = sp.BasionymKey
+			pID = sp.BasionymKey
 		}
-
-		tx.tmp = append(tx.tmp, tax)
-		tx.ids[id] = tax
-		id = tax.data.Parent
+		id = pID
 	}
+
+	for _, sp := range ls {
+		tx.AddSpecies(sp)
+	}
+	return nil
 }
 
 // An ErrAmbiguous is the error produced when searching for a name
@@ -291,6 +280,11 @@ var errAmbiguous = errors.New("ambiguous taxon name")
 //
 // It requires an internet connection.
 func (tx *Taxonomy) AddNameFromGBIF(name string, maxRank Rank) error {
+	name = Canon(name)
+	if name == "" {
+		return nil
+	}
+
 	ls, err := gbif.TaxonName(name)
 	if err != nil {
 		return err
@@ -328,33 +322,10 @@ func (tx *Taxonomy) AddNameFromGBIF(name string, maxRank Rank) error {
 		sp = ls[v]
 	}
 
-	if _, ok := tx.ids[sp.NubKey]; ok {
-		return nil
-	}
-	data := Taxon{
-		Name:   sp.CanonicalName,
-		Author: sp.Authorship,
-		ID:     sp.NubKey,
-		Rank:   GetRank(sp.Rank),
-		Status: strings.ToLower(sp.TaxonomicStatus),
-	}
-	if data.Name == "" {
-		data.Name = sp.Species
-	}
-
-	// ignore BOLD "species"
-	if data.Name == "" && strings.HasPrefix(sp.ScientificName, "BOLD:") {
-		return nil
-	}
-
-	tax := &taxon{data: data}
-
-	if data.Status == "accepted" && data.Rank != Unranked && data.Rank <= maxRank {
-		if _, ok := tx.ids[sp.ParentKey]; ok {
-			tax.data.Parent = sp.ParentKey
-		}
-		tx.tmp = append(tx.tmp, tax)
-		tx.ids[data.ID] = tax
+	status := strings.ToLower(sp.TaxonomicStatus)
+	r := GetRank(sp.Rank)
+	if status == "accepted" && r != Unranked && r <= maxRank {
+		tx.AddSpecies(sp)
 		return nil
 	}
 
@@ -369,11 +340,8 @@ func (tx *Taxonomy) AddNameFromGBIF(name string, maxRank Rank) error {
 	if err := tx.AddFromGBIF(pID, maxRank); err != nil {
 		return err
 	}
-	if _, ok := tx.ids[pID]; ok {
-		tax.data.Parent = pID
-	}
-	tx.tmp = append(tx.tmp, tax)
-	tx.ids[data.ID] = tax
+
+	tx.AddSpecies(sp)
 	return nil
 }
 
@@ -421,6 +389,29 @@ func (tx *Taxonomy) AddSpecies(sp *gbif.Species) {
 	}
 	tx.tmp = append(tx.tmp, tax)
 	tx.ids[data.ID] = tax
+	tx.names[data.Name] = append(tx.names[data.Name], data.ID)
+}
+
+// ByName returns the IDs of all the taxons with a given name.
+func (tx *Taxonomy) ByName(name string) []int64 {
+	name = Canon(name)
+	if name == "" {
+		return nil
+	}
+
+	ids, ok := tx.names[name]
+	if !ok {
+		return nil
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	v := make([]int64, len(ids))
+	copy(v, ids)
+	slices.Sort(v)
+
+	return v
 }
 
 // IDs return the ID of all taxons in the taxonomy.
