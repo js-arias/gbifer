@@ -199,6 +199,20 @@ func (tx *Taxonomy) Accepted(id int64) Taxon {
 	}
 }
 
+// AcceptedAndRanked return the accepted and ranked taxon from a given ID.
+func (tx *Taxonomy) AcceptedAndRanked(id int64) Taxon {
+	for {
+		tax, ok := tx.ids[id]
+		if !ok {
+			return Taxon{}
+		}
+		if tax.data.Status == "accepted" && tax.data.Rank != Unranked {
+			return tax.data
+		}
+		id = tax.data.Parent
+	}
+}
+
 // AddFromGBIF add a taxon from a GBIF ID,
 // as well as all the parents up to the given rank.
 //
