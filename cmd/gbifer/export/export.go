@@ -23,7 +23,8 @@ import (
 )
 
 var Command = &command.Command{
-	Usage: "export [-i|--input <file>] [-o|--output <file>]",
+	Usage: `export [-tax <file>]
+	[-i|--input <file>] [-o|--output <file>]`,
 	Short: "export to TSV RFC 4180 file",
 	Long: `
 Command export reads a GBIF occurrence table from the standard input and
@@ -185,13 +186,16 @@ func readTable(r io.Reader, w io.Writer, tx *taxonomy.Taxonomy) error {
 
 		var taxID, spID int64
 		if f, ok := fields["specieskey"]; ok {
+			if row[f] == "" {
+				continue
+			}
 			spID, err = strconv.ParseInt(row[f], 10, 64)
 			if err != nil {
-				return fmt.Errorf("table %q: row %d: field %q: %v", input, ln, "speciesID", err)
+				return fmt.Errorf("table %q: row %d: field %q: %v", input, ln, "speciesKey", err)
 			}
 			taxID = spID
 			if tx != nil {
-				tax := tx.Accepted(spID)
+				tax := tx.AcceptedAndRanked(spID)
 				if tax.ID == 0 {
 					continue
 				}
