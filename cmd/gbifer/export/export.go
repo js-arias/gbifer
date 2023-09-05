@@ -195,6 +195,15 @@ func readTable(r io.Reader, w io.Writer, tx *taxonomy.Taxonomy) error {
 			}
 			taxID = spID
 			if tx != nil {
+				if f, ok := fields["taxonkey"]; ok {
+					if row[f] != "" {
+						spID, err = strconv.ParseInt(row[f], 10, 64)
+						if err != nil {
+							return fmt.Errorf("table %q: row %d: field %q: %v", input, ln, "taxonKey", err)
+						}
+					}
+				}
+
 				tax := tx.AcceptedAndRanked(spID)
 				if tax.ID == 0 {
 					continue
