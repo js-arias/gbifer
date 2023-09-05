@@ -59,7 +59,7 @@ func setFlags(c *command.Command) {
 	c.Flags().StringVar(&input, "input", "", "")
 	c.Flags().StringVar(&input, "i", "", "")
 	c.Flags().StringVar(&output, "output", "", "")
-	c.Flags().StringVar(&input, "o", "", "")
+	c.Flags().StringVar(&output, "o", "", "")
 	c.Flags().StringVar(&taxFile, "tax", "", "")
 }
 
