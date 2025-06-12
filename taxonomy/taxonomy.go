@@ -402,7 +402,10 @@ func (tx *Taxonomy) AddSpecies(sp *gbif.Species) {
 		return
 	}
 
-	tax := &taxon{data: data}
+	tax := &taxon{
+		data:     data,
+		children: make(map[int64]*taxon),
+	}
 	var pID int64
 	if sp.AcceptedKey != 0 {
 		pID = sp.AcceptedKey

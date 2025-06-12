@@ -199,10 +199,10 @@ func filterTaxonomy(r io.Reader, w io.Writer, tx *taxonomy.Taxonomy) error {
 		if err != nil {
 			return fmt.Errorf("table %q: row %d: %v", input, ln, err)
 		}
-		if tx.Taxon(id).ID != id {
+		if tx.Taxon(id).ID == 0 {
 			continue
 		}
-		if tx.Rank(id) < taxonomy.Species {
+		if rk := tx.Rank(id); rk != taxonomy.Unranked && rk < taxonomy.Species {
 			continue
 		}
 
