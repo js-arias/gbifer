@@ -70,7 +70,6 @@ func run(c *command.Command, args []string) (err error) {
 	if err := readTable(in, tx); err != nil {
 		return err
 	}
-	tx.Stage()
 
 	var f *os.File
 	f, err = os.Create(taxFile)

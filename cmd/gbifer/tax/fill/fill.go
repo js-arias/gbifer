@@ -58,7 +58,6 @@ func run(c *command.Command, args []string) (err error) {
 	if err := fillTax(tx); err != nil {
 		return err
 	}
-	tx.Stage()
 
 	out := c.Stdout()
 	if output != "" {

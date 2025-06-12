@@ -100,7 +100,6 @@ func run(c *command.Command, args []string) (err error) {
 	if err := readTable(in, c.Stderr(), tx); err != nil {
 		return err
 	}
-	tx.Stage()
 
 	out := c.Stdout()
 	if taxFile != "" {
